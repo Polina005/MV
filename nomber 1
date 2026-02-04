@@ -1,0 +1,38 @@
+#include <iostream>
+#include <iomanip>
+#include <cmath>
+using namespace std;
+double fak(int n)
+{
+    int s = 1;
+    if (n <= 1) return 1.0;
+    for (int i = 2; i <= n; i++)
+    {
+        s*=i;
+    }
+    return s;
+}
+
+double erf(double x)
+{
+    const double t = 1e-7;
+    double s = 0.0;
+    double pre_s = 0.0;
+    double k = 2 / sqrt(3.14159265358979);
+    double nx = 0;
+    int n = 0;
+    do {
+        pre_s = s;
+        nx = (pow(-1.0, n) * pow(x, 2 * n + 1)) / (fak(n) * (2 * n + 1));
+        s += nx;
+        n++;
+    } while (fabs(s - pre_s) > t);
+        return k*s;
+}
+int main()
+{
+    cout << erf(0.5) << endl;
+    cout << erf(1.0) << endl;
+    cout << erf(5.0) << endl;
+    cout << erf(10.0) << endl;
+}
