@@ -1,38 +1,85 @@
 #include <iostream>
 #include <iomanip>
 #include <cmath>
+#include <limits>
+
 using namespace std;
-double fak(int n)
-{
-    int s = 1;
-    if (n <= 1) return 1.0;
-    for (int i = 2; i <= n; i++)
-    {
-        s*=i;
+
+static double fak(int n) {
+    double a = 1.0;
+    for (int i = 2; i <= n; i++) {
+        a *= i;
     }
-    return s;
+    return a;
 }
 
-double erf(double x)
-{
-    const double t = 1e-7;
-    double s = 0.0;
-    double pre_s = 0.0;
-    double k = 2 / sqrt(3.14159265358979);
-    double nx = 0;
+static double erf_taylor(double x) {
+    const double pi = 3.14159265358979323846;
+    const double sqrt_pi = sqrt(pi);
+    double sum = 0.0;
     int n = 0;
+    const int max_it = 1000;
+
     do {
-        pre_s = s;
-        nx = (pow(-1.0, n) * pow(x, 2 * n + 1)) / (fak(n) * (2 * n + 1));
-        s += nx;
+        double x_power;
+            x_power = pow(x, 2 * n + 1);
+      
+
+        double a = (n % 2 == 0) ? x_power : -x_power;
+        double b = fak(n) * (2 * n + 1);
+
+        // Проверяем на переполнение или деление на очень маленькое число
+        if (b == 0 || fabs(b) < 1e-300) {
+            break;
+        }
+
+        double term = a / b;
+        double old_sum = sum;
+        sum += term;
+
+        if (sum == old_sum) {
+            break;
+        }
+
         n++;
-    } while (fabs(s - pre_s) > t);
-        return k*s;
+
+        if (n > max_it) {
+            cout << " ошибка, макс число итераций" <<endl;
+            break;
+        }
+
+    } while (true);
+
+    return (2.0 / sqrt_pi) * sum;
 }
-int main()
-{
-    cout << erf(0.5) << endl;
-    cout << erf(1.0) << endl;
-    cout << erf(5.0) << endl;
-    cout << erf(10.0) << endl;
+
+int main() {
+    cout << fixed << setprecision(15);
+    setlocale(LC_ALL, "Russian");
+    double test[] = { 0.5, 1.0, 5.0, 10.0 };
+
+    for (double x : test) {
+        cout << "x = " << x << ":\n";
+
+        double my_erf = erf_taylor(x);
+        double verf = erf(x); 
+        cout << "  Ряд Тейлора: " << my_erf << endl;
+        cout << "  Встроенная erf: " << verf << endl;
+
+        if (!isnan(my_erf) && !isinf(my_erf)) {
+            cout << "  Разница: " << fabs(my_erf - verf) << endl;
+            if (verf != 0.0) {
+                cout << "  Относительная ошибка: " << fabs((my_erf - verf) / verf) << endl;
+            }
+            else {
+                cout << "  Относительная ошибка: не определена (деление на 0)" << endl;
+            }
+        }
+        else {
+            cout << "  Ошибка: ряд не сошелся или произошло переполнение" << endl;
+        }
+        cout << endl;
+    }
+
+    return 0;
 }
