@@ -1,0 +1,139 @@
+#include <iostream>
+#include <cmath>
+#include <iomanip>
+
+using namespace std;
+
+const double t = 3e-8;  
+const double micro = 500.0; 
+const int toch = 12;
+const int max_it = 2000000;
+
+
+void checkConvergence() {
+    cout << "\nA) Ряды сходятся, так как их члены убывают как 1/k^(3/2), а ряд 1/k^(3/2) сходится\n";
+}
+
+// Оценка необходимого числа членов
+int kolchel(double x) {
+    if (x == 0.0) return 2;
+    // Из соотношения: |2x|/k^(9/2) < ε  =>  k > (2|x|/ε)^(2/9)
+    double r = pow(2.0 * fabs(x) / t, 2.0 / 9.0);
+    int result = (int)ceil(r);
+    return (result < 8) ? 8 : result;  // минимум 8 членов
+}
+
+double time(int n) {
+    return n * micro * 2.0 / 1e6;
+}
+
+// Медленный метод (прямое суммирование двух рядов)
+void slow(double x, double& sum, int& term) {
+    double accumulator = 0.0;
+    int c = 1;
+
+    while (true) {
+        double termPos = 1.0 / sqrt(1.0 * c * c * c + x);
+        double termNeg = 1.0 / sqrt(1.0 * c * c * c - x);
+        double currentTerm = termPos - termNeg;
+
+        accumulator += currentTerm;
+        c++;
+
+        if (fabs(currentTerm) < t && c > toch)
+            break;
+        if (c > max_it) {
+            cout << "медленный метод превысил лимит итераций\n";
+            break;
+        }
+    }
+
+    sum = accumulator;
+    term = c - 1;
+}
+
+// Быстрый метод (с алгебраическим преобразованием)
+void computeFastMethod(double x, double& sum, int& term) {
+    double accumul = 0.0;
+    int c = 1;
+
+    while (true) {
+        double kCubed = 1.0 * c * c * c;
+        double rootPos = sqrt(kCubed + x);
+        double rootNeg = sqrt(kCubed - x);
+
+        // Преобразованное выражение: 
+        // 1/√(k³+x) - 1/√(k³-x) = -2x / (√(k³+x)·√(k³-x)·(√(k³+x)+√(k³-x)))
+        double transformedTerm = -2.0 * x / (rootPos * rootNeg * (rootPos + rootNeg));
+
+        accumul += transformedTerm;
+        c++;
+
+        if (fabs(transformedTerm) < t && c > toch)
+            break;
+        if (c > max_it) {
+            cout << "быстрый метод превысил лимит итераций\n";
+            break;
+        }
+    }
+
+    sum = accumul;
+    term = c - 1;
+}
+
+// Вывод результатов для одного значения x
+void processX(double x) {
+    cout << "\n===========================================================";
+    cout << "\n x = " << setprecision(10) << x;
+    cout << "\n===========================================================";
+
+    // Пункт А
+    checkConvergence();
+
+    // Пункт Б
+    int neededTerms = kolchel(x);
+    cout << "\nБ) Необходимо примерно " << neededTerms << " членов ряда";
+
+    // Пункт В
+    double timeEstimate = time(neededTerms);
+    cout << "\nВ) Оценочное время вычисления: " << timeEstimate << " секунд";
+
+    // Пункт Г
+    cout << "\nГ) Алгебраическое преобразование:";
+    cout << "\n   1/sqrt(k^3+x) - 1/sqrt(k^3-x) = -2x / (sqrt(k^3+x)sqrt(k^3-x)(sqrt(k^3+x)+sqrt(k^3-x)))";
+
+    // Пункт Д - вычисления
+    double slowResult, fastResult;
+    int slowCount, fastCount;
+
+    slow(x, slowResult, slowCount);
+    computeFastMethod(x, fastResult, fastCount);
+
+    cout << "\n\nД) Результаты вычислений:";
+    cout << "\n   Медленный метод:  S = " << setprecision(12) << slowResult;
+    cout << "\n   Использовано членов: " << slowCount;
+    cout << "\n   Быстрый метод:    S = " << setprecision(12) << fastResult;
+    cout << "\n   Использовано членов: " << fastCount;
+
+    double difference = fabs(slowResult - fastResult);
+    cout << "\n   Расхождение результатов: " << setprecision(12) << difference;
+
+    cout << "\n";
+}
+
+int main() {
+    setlocale(LC_ALL, "russian");
+    // Отключаем синхронизацию для ускорения вывода
+    ios_base::sync_with_stdio(false);
+    cin.tie(nullptr);
+
+    cout << fixed;
+
+    double testValues[] = { 0.5, 0.9999999999 };
+
+    for (double xVal : testValues) {
+        processX(xVal);
+    }
+
+    return 0;
+}
