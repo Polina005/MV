@@ -4,8 +4,8 @@
 
 using namespace std;
 
-const double t = 3e-8;  
-const double micro = 500.0; 
+const double t = 3e-8;
+const double micro = 500.0;
 const int toch = 12;
 const int max_it = 2000000;
 
@@ -14,20 +14,18 @@ void checkConvergence() {
     cout << "\nA) Ряды сходятся, так как их члены убывают как 1/k^(3/2), а ряд 1/k^(3/2) сходится\n";
 }
 
-// Оценка необходимого числа членов
 int kolchel(double x) {
     if (x == 0.0) return 2;
     // Из соотношения: |2x|/k^(9/2) < ε  =>  k > (2|x|/ε)^(2/9)
     double r = pow(2.0 * fabs(x) / t, 2.0 / 9.0);
     int result = (int)ceil(r);
-    return (result < 8) ? 8 : result;  // минимум 8 членов
+    return result; 
 }
 
 double time(int n) {
     return n * micro * 2.0 / 1e6;
 }
 
-// Медленный метод (прямое суммирование двух рядов)
 void slow(double x, double& sum, int& term) {
     double accumulator = 0.0;
     int c = 1;
@@ -52,8 +50,7 @@ void slow(double x, double& sum, int& term) {
     term = c - 1;
 }
 
-// Быстрый метод (с алгебраическим преобразованием)
-void computeFastMethod(double x, double& sum, int& term) {
+void fast(double x, double& sum, int& term) {
     double accumul = 0.0;
     int c = 1;
 
@@ -81,7 +78,7 @@ void computeFastMethod(double x, double& sum, int& term) {
     term = c - 1;
 }
 
-// Вывод результатов для одного значения x
+
 void processX(double x) {
     cout << "\n===========================================================";
     cout << "\n x = " << setprecision(10) << x;
@@ -107,7 +104,7 @@ void processX(double x) {
     int slowCount, fastCount;
 
     slow(x, slowResult, slowCount);
-    computeFastMethod(x, fastResult, fastCount);
+    fast(x, fastResult, fastCount);
 
     cout << "\n\nД) Результаты вычислений:";
     cout << "\n   Медленный метод:  S = " << setprecision(12) << slowResult;
@@ -123,7 +120,6 @@ void processX(double x) {
 
 int main() {
     setlocale(LC_ALL, "russian");
-    // Отключаем синхронизацию для ускорения вывода
     ios_base::sync_with_stdio(false);
     cin.tie(nullptr);
 
@@ -135,5 +131,4 @@ int main() {
         processX(xVal);
     }
 
-    return 0;
 }
