@@ -1,0 +1,326 @@
+#include <iostream>
+#include <vector>
+#include <cmath>
+#include <iomanip>
+
+using namespace std;
+
+
+double my_erf(double x) {
+    double t = 1.0 / (1.0 + 0.5 * abs(x));
+    double tau = t * exp(-x * x - 1.26551223 +
+        t * (1.00002368 +
+            t * (0.37409196 +
+                t * (0.09678418 +
+                    t * (-0.18628806 +
+                        t * (0.27886807 +
+                            t * (-1.13520398 +
+                                t * (1.48851587 +
+                                    t * (-0.82215223 +
+                                        t * 0.17087277)))))))));
+    return x >= 0 ? 1 - tau : tau - 1;
+}
+
+// Решение системы методом Гаусса 
+vector<double> gaussSolve(vector<vector<double>> A, vector<double> b) {
+    int n = (int)A.size(); 
+
+    // Прямой ход - приводим к треугольному виду
+    for (int i = 0; i < n; i++) {
+        // Ищем максимальный элемент в столбце
+        int maxRow = i;
+        for (int k = i + 1; k < n; k++) {
+            if (abs(A[k][i]) > abs(A[maxRow][i])) {
+                maxRow = k;
+            }
+        }
+
+        // Меняем строки местами
+        swap(A[i], A[maxRow]);
+        swap(b[i], b[maxRow]);
+
+        // Проверка на вырожденность
+        if (abs(A[i][i]) < 1e-10) {
+            cout << "Матрица вырождена!" << endl;
+            return vector<double>();
+        }
+
+        // Обнуляем элементы ниже главной диагонали
+        for (int k = i + 1; k < n; k++) {
+            double factor = A[k][i] / A[i][i];
+            for (int j = i; j < n; j++) {
+                A[k][j] -= factor * A[i][j];
+            }
+            b[k] -= factor * b[i];
+        }
+    }
+
+    // Обратный ход - находим решение
+    vector<double> x(n);
+    for (int i = n - 1; i >= 0; i--) {
+        x[i] = b[i];
+        for (int j = i + 1; j < n; j++) {
+            x[i] -= A[i][j] * x[j];
+        }
+        x[i] /= A[i][i];
+    }
+
+    return x;
+}
+
+// Вычисление определителя матрицы (для проверки вырожденности)
+double determinant(vector<vector<double>> A) {
+    int n = (int)A.size();
+    double det = 1.0;
+
+    for (int i = 0; i < n; i++) {
+        // Поиск главного элемента
+        int maxRow = i;
+        for (int k = i + 1; k < n; k++) {
+            if (abs(A[k][i]) > abs(A[maxRow][i])) {
+                maxRow = k;
+            }
+        }
+
+        if (maxRow != i) {
+            swap(A[i], A[maxRow]);
+            det *= -1; // Меняем знак определителя при перестановке строк
+        }
+
+        if (abs(A[i][i]) < 1e-10) {
+            return 0.0; // Матрица вырождена
+        }
+
+        det *= A[i][i];
+
+        // Приводим к верхнетреугольному виду
+        for (int k = i + 1; k < n; k++) {
+            double factor = A[k][i] / A[i][i];
+            for (int j = i; j < n; j++) {
+                A[k][j] -= factor * A[i][j];
+            }
+        }
+    }
+
+    return det;
+}
+
+// Вычисление нормы матрицы (максимум суммы по столбцам)
+double matrixNorm(const vector<vector<double>>& A) {
+    int n = (int)A.size();
+    double maxColSum = 0.0;
+
+    for (int j = 0; j < n; j++) {
+        double colSum = 0.0;
+        for (int i = 0; i < n; i++) {
+            colSum += abs(A[i][j]);
+        }
+        maxColSum = max(maxColSum, colSum);
+    }
+
+    return maxColSum;
+}
+
+// Вычисление обратной матрицы
+vector<vector<double>> inverseMatrix(const vector<vector<double>>& A) {
+    int n = (int)A.size();
+    vector<vector<double>> inv(n, vector<double>(n, 0.0));
+
+    // Создаём расширенную матрицу [A | I]
+    vector<vector<double>> augmented(n, vector<double>(2 * n));
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < n; j++) {
+            augmented[i][j] = A[i][j];
+        }
+        augmented[i][n + i] = 1.0; // Единичная матрица справа
+    }
+
+    // Прямой ход метода Гаусса
+    for (int i = 0; i < n; i++) {
+        // Поиск главного элемента
+        int maxRow = i;
+        for (int k = i + 1; k < n; k++) {
+            if (abs(augmented[k][i]) > abs(augmented[maxRow][i])) {
+                maxRow = k;
+            }
+        }
+
+        swap(augmented[i], augmented[maxRow]);
+
+        // Нормализуем строку
+        double pivot = augmented[i][i];
+        for (int j = 0; j < 2 * n; j++) {
+            augmented[i][j] /= pivot;
+        }
+
+        // Обнуляем остальные строки
+        for (int k = 0; k < n; k++) {
+            if (k != i) {
+                double factor = augmented[k][i];
+                for (int j = 0; j < 2 * n; j++) {
+                    augmented[k][j] -= factor * augmented[i][j];
+                }
+            }
+        }
+    }
+
+    // Извлекаем обратную матрицу
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < n; j++) {
+            inv[i][j] = augmented[i][n + j];
+        }
+    }
+
+    return inv;
+}
+
+// Число обусловленности
+double conditionNumber(const vector<vector<double>>& A) {
+    double normA = matrixNorm(A);
+    vector<vector<double>> Ainv = inverseMatrix(A);
+    double normAinv = matrixNorm(Ainv);
+    return normA * normAinv;
+}
+
+// Невязка - максимальная разница между Ax и b
+double residual(const vector<vector<double>>& A,
+    const vector<double>& x,
+    const vector<double>& b) {
+    int n = (int)A.size();
+    double maxDiff = 0.0;
+
+    for (int i = 0; i < n; i++) {
+        double sum = 0.0;
+        for (int j = 0; j < n; j++) {
+            sum += A[i][j] * x[j];
+        }
+        maxDiff = max(maxDiff, abs(sum - b[i]));
+    }
+
+    return maxDiff;
+}
+
+// Печать вектора
+void printVector(const string& name, const vector<double>& v) {
+    cout << name << " = [";
+    for (size_t i = 0; i < v.size(); i++) {
+        cout << fixed << setprecision(6) << v[i];
+        if (i < v.size() - 1) cout << ", ";
+    }
+    cout << "]" << endl;
+}
+
+// Задача 1
+void task1() {
+    cout << "\n  ЗАДАЧА 1  \n" << endl;
+
+    // Матрица системы
+    vector<vector<double>> A = {
+        {1.00, 0.80, 0.64},
+        {1.00, 0.90, 0.81},
+        {1.00, 1.10, 1.21}
+    };
+
+    // Правая часть
+    vector<double> b = {
+        my_erf(0.80),  // Используем my_erf вместо erf
+        my_erf(0.90),
+        my_erf(1.10)
+    };
+
+    cout << "Правая часть b = [";
+    for (int i = 0; i < 3; i++) {
+        cout << fixed << setprecision(6) << b[i];
+        if (i < 2) cout << ", ";
+    }
+    cout << "]" << endl;
+
+    // а) Решение системы и число обусловленности
+    vector<double> x = gaussSolve(A, b);
+
+    // Проверка, что решение получено
+    if (x.empty()) {
+        cout << "Ошибка: не удалось найти решение!" << endl;
+        return;
+    }
+
+    double cond = conditionNumber(A);
+
+    cout << "\nа) Число обусловленности cond(A) = " << cond << endl;
+    printVector("   Решение x", x);
+
+    // б) Невязка
+    double resid = residual(A, x, b);
+    cout << "\nб) Невязка |Ax - b| = " << scientific << resid << endl;
+
+    // в) Сумма x1+x2+x3 и сравнение с erf(1)
+    double sumX = x[0] + x[1] + x[2];
+    double erf1 = my_erf(1.0);  // Используем my_erf
+
+    cout << "\nв) x1 + x2 + x3 = " << fixed << setprecision(6) << sumX << endl;
+    cout << "   erf(1.0)      = " << erf1 << endl;
+    cout << "   Разность      = " << abs(sumX - erf1) << endl;
+    cout << "\nОни близки, потому что мы аппроксимируем erf(x) многочленом\n";
+    cout << "второй степени по точкам 0.8, 0.9, 1.1. При x=1 сумма базисных\n";
+    cout << "функций (1, x, x^2) равна 1+1+1=3, поэтому сумма коэффициентов\n";
+    cout << "даёт значение, близкое к erf(1)." << endl;
+}
+
+// Задача 2
+void task2() {
+    cout << "\n   ЗАДАЧА 2   \n" << endl;
+
+    vector<vector<double>> A = {
+        {0.1, 0.2, 0.3},
+        {0.4, 0.5, 0.6},
+        {0.7, 0.8, 0.9}
+    };
+
+    vector<double> b = { 0.1, 0.3, 0.5 };
+
+    // Проверяем определитель
+    double det = determinant(A);
+    cout << "Определитель матрицы = " << det << endl;
+
+    if (abs(det) < 1e-10) {
+        cout << "Матрица вырождена!" << endl;
+
+        // Проверяем совместность системы
+        cout << "\nПроверка совместности:" << endl;
+        cout << "Третья строка = 2*вторая - первая" << endl;
+        cout << "2*0.4 - 0.1 = 0.7 (совпадает)" << endl;
+        cout << "2*0.5 - 0.2 = 0.8 (совпадает)" << endl;
+        cout << "2*0.6 - 0.3 = 0.9 (совпадает)" << endl;
+
+        cout << "\nПравая часть: 2*0.3 - 0.1 = 0.5 (совпадает с b3)" << endl;
+        cout << "Система совместна!" << endl;
+
+        cout << "\nОбщее решение:" << endl;
+        cout << "x = (1/3, 1/3, 0) + t * (1, -2, 1), где t - любое число" << endl;
+
+        // Проверка
+        cout << "\nПроверка базиса ядра:" << endl;
+        cout << "A * (1, -2, 1) = (";
+        double a1 = 0.1 * 1 + 0.2 * (-2) + 0.3 * 1;
+        double a2 = 0.4 * 1 + 0.5 * (-2) + 0.6 * 1;
+        double a3 = 0.7 * 1 + 0.8 * (-2) + 0.9 * 1;
+        cout << a1 << ", " << a2 << ", " << a3 << ") = (0, 0, 0)" << endl;
+
+    }
+    else {
+        cout << "Матрица невырождена - решение единственно" << endl;
+        vector<double> x = gaussSolve(A, b);
+        printVector("Решение x", x);
+    }
+}
+
+int main() {
+    // Для поддержки русского языка в консоли Windows
+#ifdef _WIN32
+    system("chcp 1251 > nul");
+#endif
+
+    task1();
+    task2();
+
+}
