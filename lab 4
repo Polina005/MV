@@ -1,270 +1,113 @@
 #include <iostream>
-#include <vector>
 #include <iomanip>
 #include <cmath>
 
 using namespace std;
 
-// Функция для вычисления нормы невязки
-double computeNorm(const vector<double>& x, const vector<vector<double>>& A,
-    const vector<double>& b) {
-    int n = A.size();
-    double norm = 0.0;
+void jacobi(double A[3][3], double b[3], double epsilon, int maxIter) {
+    double x[3] = { 0, 0, 0 };
+    double x_new[3];
 
-    for (int i = 0; i < n; i++) {
-        double sum = 0.0;
-        for (int j = 0; j < n; j++) {
-            sum += A[i][j] * x[j];
-        }
-        norm += pow(sum - b[i], 2);
-    }
+    cout << "МЕТОД ЯКОБИ\n";
 
-    return sqrt(norm);
-}
+    for (int iter = 1; iter <= maxIter; iter++) {
+        // Вычисляем новые значения
+        x_new[0] = (b[0] - A[0][1] * x[1] - A[0][2] * x[2]) / A[0][0];
+        x_new[1] = (b[1] - A[1][0] * x[0] - A[1][2] * x[2]) / A[1][1];
+        x_new[2] = (b[2] - A[2][0] * x[0] - A[2][1] * x[1]) / A[2][2];
 
-// Метод Якоби
-vector<vector<double>> jacobiMethod(const vector<vector<double>>& A,
-    const vector<double>& b,
-    const vector<double>& x0,
-    double epsilon, int maxIter) {
-    int n = A.size();
-    vector<double> x = x0;
-    vector<double> x_new(n, 0.0);
-    vector<vector<double>> history;
+        // Вычисляем разницу между новым и старым приближением
+        double diff = 0;
+        diff = max(diff, fabs(x_new[0] - x[0]));
+        diff = max(diff, fabs(x_new[1] - x[1]));
+        diff = max(diff, fabs(x_new[2] - x[2]));
 
-    cout << "\nМЕТОД ЯКОБИ\n";
-    cout << "Начальное приближение: ";
-    for (int i = 0; i < n; i++) cout << x[i] << " ";
-    cout << endl;
+        cout << "Итерация " << iter << ": ";
+        cout << "x1 = " << fixed << setprecision(6) << x_new[0] << " ";
+        cout << "x2 = " << x_new[1] << " ";
+        cout << "x3 = " << x_new[2] << " ";
+        cout << "разница = " << diff << endl;
 
-    for (int iter = 0; iter < maxIter; iter++) {
-        // Вычисляем новое приближение
-        for (int i = 0; i < n; i++) {
-            double sum = b[i];
-            for (int j = 0; j < n; j++) {
-                if (j != i) {
-                    sum -= A[i][j] * x[j];
-                }
-            }
-            x_new[i] = sum / A[i][i];
-        }
-
-        // Вычисляем норму невязки
-        double norm = computeNorm(x_new, A, b);
-        history.push_back({ (double)iter + 1, norm });
+        // Копируем новые значения в старые
+        x[0] = x_new[0];
+        x[1] = x_new[1];
+        x[2] = x_new[2];
 
         // Проверка точности
-        double diff = 0.0;
-        for (int i = 0; i < n; i++) {
-            diff = max(diff, abs(x_new[i] - x[i]));
-        }
-
-        x = x_new;
-
-        cout << "Итерация " << iter + 1 << ": невязка = " << scientific << norm;
-        cout << ", разница = " << diff << endl;
-
         if (diff < epsilon) {
-            cout << "Достигнута заданная точность на итерации " << iter + 1 << endl;
+            cout << "\nДостигнута точность на итерации " << iter << endl;
             break;
         }
     }
 
-    cout << "\nРешение методом Якоби:\n";
-    for (int i = 0; i < n; i++) {
-        cout << "x" << i + 1 << " = " << fixed << setprecision(6) << x[i] << endl;
-    }
-
-    return history;
+    cout << "\nРешение:\n";
+    cout << "x1 = " << x[0] << endl;
+    cout << "x2 = " << x[1] << endl;
+    cout << "x3 = " << x[2] << endl;
 }
 
 // Метод Зейделя
-vector<vector<double>> seidelMethod(const vector<vector<double>>& A,
-    const vector<double>& b,
-    const vector<double>& x0,
-    double epsilon, int maxIter) {
-    int n = A.size();
-    vector<double> x = x0;
-    vector<vector<double>> history;  // для хранения норм невязок
+void seidel(double A[3][3], double b[3], double epsilon, int maxIter) {
+    double x[3] = { 0, 0, 0 };
 
     cout << "\nМЕТОД ЗЕЙДЕЛЯ\n";
-    cout << "Начальное приближение: ";
-    for (int i = 0; i < n; i++) cout << x[i] << " ";
-    cout << endl;
+    cout << "--------------\n";
 
-    for (int iter = 0; iter < maxIter; iter++) {
-        vector<double> x_old = x;
+    for (int iter = 1; iter <= maxIter; iter++) {
+        double x_old[3] = { x[0], x[1], x[2] };
 
-        // Вычисляем новое приближение
-        for (int i = 0; i < n; i++) {
-            double sum = b[i];
-            for (int j = 0; j < n; j++) {
-                if (j != i) {
-                    sum -= A[i][j] * x[j];
-                }
-            }
-            x[i] = sum / A[i][i];
-        }
+        // Вычисляем новые значения (используем уже обновлённые)
+        x[0] = (b[0] - A[0][1] * x[1] - A[0][2] * x[2]) / A[0][0];
+        x[1] = (b[1] - A[1][0] * x[0] - A[1][2] * x[2]) / A[1][1];
+        x[2] = (b[2] - A[2][0] * x[0] - A[2][1] * x[1]) / A[2][2];
 
-        // Вычисляем норму невязки
-        double norm = computeNorm(x, A, b);
-        history.push_back({ (double)iter + 1, norm });
+        // Вычисляем разницу
+        double diff = 0;
+        diff = max(diff, fabs(x[0] - x_old[0]));
+        diff = max(diff, fabs(x[1] - x_old[1]));
+        diff = max(diff, fabs(x[2] - x_old[2]));
+
+        cout << "Итерация " << iter << ": ";
+        cout << "x1 = " << fixed << setprecision(6) << x[0] << " ";
+        cout << "x2 = " << x[1] << " ";
+        cout << "x3 = " << x[2] << " ";
+        cout << "разница = " << diff << endl;
 
         // Проверка точности
-        double diff = 0.0;
-        for (int i = 0; i < n; i++) {
-            diff = max(diff, abs(x[i] - x_old[i]));
-        }
-
-        cout << "Итерация " << iter + 1 << ": невязка = " << scientific << norm;
-        cout << ", разница = " << diff << endl;
-
         if (diff < epsilon) {
-            cout << "Достигнута заданная точность на итерации " << iter + 1 << endl;
+            cout << "\nДостигнута точность на итерации " << iter << endl;
             break;
         }
     }
 
-    cout << "\nРешение методом Зейделя:\n";
-    for (int i = 0; i < n; i++) {
-        cout << "x" << i + 1 << " = " << fixed << setprecision(6) << x[i] << endl;
-    }
-
-    return history;
-}
-
-// Функция для вывода графика зависимости нормы невязки
-void printResidualPlot(const vector<vector<double>>& history, const string& methodName) {
-    cout << "\nГрафик зависимости нормы невязки от номера итерации:\n";
-
-
-    double maxNorm = 0.0;
-    for (const auto& h : history) {
-        maxNorm = max(maxNorm, h[1]);
-    }
-
-    int plotHeight = 10;
-
-    for (int level = plotHeight; level >= 0; level--) {
-        double normLevel = maxNorm * level / plotHeight;
-        cout << setw(8) << scientific << setprecision(1) << normLevel << " |";
-
-        for (const auto& h : history) {
-            if (h[1] >= normLevel) {
-                cout << " * ";
-            }
-            else {
-                cout << "   ";
-            }
-        }
-        cout << endl;
-    }
-
-    cout << "         +";
-    for (int i = 0; i < (int)history.size(); i++) {
-        cout << "---";
-    }
-    cout << "\n          ";
-    for (const auto& h : history) {
-        cout << setw(3) << (int)h[0];
-    }
-    cout << "  (номер итерации)\n";
+    cout << "\nРешение:\n";
+    cout << "x1 = " << x[0] << endl;
+    cout << "x2 = " << x[1] << endl;
+    cout << "x3 = " << x[2] << endl;
 }
 
 int main() {
     setlocale(LC_ALL, "Russian");
-    cout << "ИТЕРАЦИОННЫЕ МЕТОДЫ РЕШЕНИЯ СЛАУ\n";
-    cout << "Методы Якоби и Зейделя\n\n";
 
-    // Ввод размерности системы
-    int n;
-    cout << "Введите размерность системы n: ";
-    cin >> n;
+    // Матрица A
+    double A[3][3] = {
+        { 4, -1,  1},
+        { 1,  5, -1},
+        { 1, -1, -5}
+    };
 
-    if (n < 1) {
-        cout << "Ошибка: неверная размерность\n";
-        return 1;
-    }
-    vector<vector<double>> A(n, vector<double>(n));
-    vector<double> b(n);
-    cout << "\nВведите матрицу A (по строкам):\n";
-    for (int i = 0; i < n; i++) {
-        cout << "Строка " << i + 1 << ": ";
-        for (int j = 0; j < n; j++) {
-            cin >> A[i][j];
-        }
-    }
+    // Вектор b
+    double b[3] = { 3, 2, 6 };
 
-    cout << "\nВведите правую часть b:\n";
-    for (int i = 0; i < n; i++) {
-        cout << "b[" << i + 1 << "] = ";
-        cin >> b[i];
-    }
+    double epsilon = 0.001;
+    int maxIter = 100;
 
-    bool diagonalDominant = true;
-    for (int i = 0; i < n; i++) {
-        double sum = 0.0;
-        for (int j = 0; j < n; j++) {
-            if (j != i) sum += abs(A[i][j]);
-        }
-        if (abs(A[i][i]) <= sum) {
-            diagonalDominant = false;
-        }
-    }
+    cout << "Система уравнений:\n";
+    cout << "4x1 - x2 + x3 = 3\n";
+    cout << "x1 + 5x2 - x3 = 2\n";
+    cout << "x1 - x2 - 5x3 = 6\n\n";
 
-    if (!diagonalDominant) {
-        cout << "\nПредупреждение: Матрица не имеет диагонального преобладания!\n";
-        cout << "Методы могут не сходиться.\n";
-    }
-
-    double epsilon;
-    int maxIter;
-    int numStartPoints;
-
-    cout << "\nВведите точность epsilon: ";
-    cin >> epsilon;
-
-    cout << "Введите максимальное число итераций: ";
-    cin >> maxIter;
-
-    cout << "Введите количество различных начальных приближений: ";
-    cin >> numStartPoints;
-
-    // Для каждого начального приближения
-    for (int sp = 0; sp < numStartPoints; sp++) {
-        cout << "\n========================================\n";
-        cout << "НАЧАЛЬНОЕ ПРИБЛИЖЕНИЕ #" << sp + 1 << endl;
-
-        vector<double> x0(n);
-        cout << "Введите начальное приближение x0:\n";
-        for (int i = 0; i < n; i++) {
-            cout << "x0[" << i + 1 << "] = ";
-            cin >> x0[i];
-        }
-
-        // Решение методом Якоби
-        auto historyJacobi = jacobiMethod(A, b, x0, epsilon, maxIter);
-        printResidualPlot(historyJacobi, "Якоби");
-
-        // Решение методом Зейделя
-        auto historySeidel = seidelMethod(A, b, x0, epsilon, maxIter);
-        printResidualPlot(historySeidel, "Зейдель");
-
-        // Сравнение методов
-        cout << "\nСРАВНЕНИЕ МЕТОДОВ:\n";
-        cout << "Метод Якоби: " << historyJacobi.size() << " итераций\n";
-        cout << "Метод Зейделя: " << historySeidel.size() << " итераций\n";
-
-        if (historyJacobi.size() < historySeidel.size()) {
-            cout << "Метод Якоби сошёлся быстрее\n";
-        }
-        else if (historyJacobi.size() > historySeidel.size()) {
-            cout << "Метод Зейделя сошёлся быстрее\n";
-        }
-        else {
-            cout << "Методы сошлись за одинаковое число итераций\n";
-        }
-    }
-
-    return 0;
+    // Запуск методов
+    jacobi(A, b, epsilon, maxIter);
+    seidel(A, b, epsilon, maxIter);
 }
