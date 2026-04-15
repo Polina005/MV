@@ -1,0 +1,126 @@
+#include <iostream>
+#include <iomanip>
+#include <cmath>
+
+using namespace std;
+
+void jacobi(double A[4][4], double b[4], double x[4], double epsilon, int maxIter) {
+    
+    double x_new[4];
+
+    cout << "МЕТОД ЯКОБИ\n";
+
+    for (int iter = 1; iter <= maxIter; iter++) {
+
+        x_new[0] = (b[0] - A[0][1] * x[1] - A[0][2] * x[2]) / A[0][0];
+        x_new[1] = (b[1] - A[1][0] * x[0] - A[1][2] * x[2]) / A[1][1];
+        x_new[2] = (b[2] - A[2][0] * x[0] - A[2][1] * x[1]) / A[2][2];
+        x_new[3] = (b[3] - A[3][0] * x[0] - A[3][1] * x[1]) / A[3][3];
+
+        double diff = 0;
+        diff = max(diff, fabs(x_new[0] - x[0]));
+        diff = max(diff, fabs(x_new[1] - x[1]));
+        diff = max(diff, fabs(x_new[2] - x[2]));
+        diff = max(diff, fabs(x_new[3] - x[3]));
+
+        cout << "Итерация " << iter << ": ";
+        cout << "x1 = " << fixed << setprecision(6) << x_new[0] << " ";
+        cout << "x2 = " << x_new[1] << " ";
+        cout << "x3 = " << x_new[2] << " ";
+        cout << "x4 = " << x_new[3] << " ";
+        cout << "разница = " << diff << endl;
+
+        x[0] = x_new[0];
+        x[1] = x_new[1];
+        x[2] = x_new[2];
+        x[3] = x_new[3];
+
+        if (diff < epsilon) {
+            cout << "\nДостигнута точность на итерации " << iter << endl;
+            break;
+        }
+    }
+
+    cout << "\nРешение:\n";
+    cout << "x1 = " << x[0] << endl;
+    cout << "x2 = " << x[1] << endl;
+    cout << "x3 = " << x[2] << endl;
+    cout << "x4 = " << x[3] << endl;
+}
+
+void seidel(double A[4][4], double b[4], double x[4], double epsilon, int maxIter) {
+    
+    cout << "\nМЕТОД ЗЕЙДЕЛЯ\n";
+    cout << "--------------\n";
+
+    for (int iter = 1; iter <= maxIter; iter++) {
+        double x_old[4] = { x[0], x[1], x[2], x[3]};
+
+        for (int i = 0; i < 3; i++) {
+            double sum = 0;
+            for (int j = 0; j < 3; j++) {
+                if (j != i) {
+                    sum += A[i][j] * x[j];
+                }
+            }
+            x[i] = (b[i] - sum) / A[i][i];
+        }
+
+        double diff = 0;
+        diff = max(diff, fabs(x[0] - x_old[0]));
+        diff = max(diff, fabs(x[1] - x_old[1]));
+        diff = max(diff, fabs(x[2] - x_old[2]));
+        diff = max(diff, fabs(x[3] - x_old[3]));
+
+        cout << "Итерация " << iter << ": ";
+        cout << "x1 = " << fixed << setprecision(6) << x[0] << " ";
+        cout << "x2 = " << x[1] << " ";
+        cout << "x3 = " << x[2] << " ";
+        cout << "x4 = " << x[3] << " ";
+        cout << "разница = " << diff << endl;
+
+        if (diff < epsilon) {
+            cout << "\nДостигнута точность на итерации " << iter << endl;
+            break;
+        }
+    }
+
+    cout << "\nРешение:\n";
+    cout << "x1 = " << x[0] << endl;
+    cout << "x2 = " << x[1] << endl;
+    cout << "x3 = " << x[2] << endl;
+    cout << "x4 = " << x[3] << endl;
+}
+
+int main() {
+    setlocale(LC_ALL, "Russian");
+
+    double A[4][4] = {
+        { 12.14, 1.32, -0.78, -2.75},
+        { -0.89, 16.75, 1.88, -1.55},
+        { 2.65, -1.27, -15.64, -0.64},
+        {2.44, 1.52, 1.93, -11.43}
+    };
+
+    double b[4] = { 14.78, -12.14, -11.65, 4.26 };
+
+    double x[4][4] = {
+        {0, 0, 0, 0},
+        {1, 1, 1, 1},
+        {10, -10, 10, -10},
+        {100, 100, 100, 100}
+    };
+
+    double epsilon = 0.00001;
+    int maxIter = 100;
+
+    cout << "Система уравнений:\n";
+    cout << "12.14x1 + 1.322 - 0.78x3 - 2.75x4 = 14.78\n";
+    cout << "- 0.89x1 + 16.75x2 + 1.88x3 - 1.55x4 = -12.14\n";
+    cout << "2.65x1 - 1.27x2 - 15.64x3 - 0.64x4 = -11.65\n";
+    cout << "2.44x1 + 1.52x2 + 1.93x3  - 11.43x4 = 4.26\n\n";
+
+    
+    jacobi(A, b, x[0], epsilon, maxIter);
+    seidel(A, b, x[0], epsilon, maxIter);
+}
