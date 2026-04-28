@@ -1,0 +1,89 @@
+#include <iostream>
+#include <vector>
+#include <cmath>
+#include <iomanip>
+#include <sstream>
+#include <algorithm>
+#include <string>
+
+using namespace std;
+
+string format(double value) {
+    stringstream ss;
+    ss << fixed << setprecision(6) << value;
+    string str = ss.str();
+    replace(str.begin(), str.end(), '.', ',');
+    return str;
+}
+
+class CubicSpline {
+private:
+    vector<double> x, a, b, c, d;
+    int n;
+
+public:
+    CubicSpline(const vector<double>& X, const vector<double>& Y) {
+        x = X;
+        n = (int)x.size() - 1;
+        a = Y;
+        b.resize(n);
+        c.resize(n + 1);
+        d.resize(n);
+
+        vector<double> h(n), alpha(n), l(n + 1), mu(n + 1), z(n + 1);
+
+        for (int i = 0; i < n; i++) h[i] = x[i + 1] - x[i];
+        for (int i = 1; i < n; i++) {
+            alpha[i] = (3.0 / h[i]) * (a[i + 1] - a[i]) - (3.0 / h[i - 1]) * (a[i] - a[i - 1]);
+        }
+
+        l[0] = 1; mu[0] = 0; z[0] = 0;
+        for (int i = 1; i < n; i++) {
+            l[i] = 2 * (x[i + 1] - x[i - 1]) - h[i - 1] * mu[i - 1];
+            mu[i] = h[i] / l[i];
+            z[i] = (alpha[i] - h[i - 1] * z[i - 1]) / l[i];
+        }
+        l[n] = 1; z[n] = 0; c[n] = 0;
+
+        for (int j = n - 1; j >= 0; j--) {
+            c[j] = z[j] - mu[j] * c[j + 1];
+            b[j] = (a[j + 1] - a[j]) / h[j] - h[j] * (c[j + 1] + 2 * c[j]) / 3;
+            d[j] = (c[j + 1] - c[j]) / (3 * h[j]);
+        }
+    }
+
+    double interpolate(double x_val) const {
+        if (x_val <= x[0]) return a[0];
+        if (x_val >= x[n]) return a[n];
+
+        int i = 0;
+        while (i < n && x_val > x[i + 1]) i++;
+
+        double dx = x_val - x[i];
+        return a[i] + b[i] * dx + c[i] * dx * dx + d[i] * dx * dx * dx;
+    }
+};
+
+int main() {
+    setlocale(LC_ALL, "Russian");
+
+    vector<double> Xt = { 2, 3, 5, 7 };
+    vector<double> Yt = { 4, -2, 6, -3 };
+    CubicSpline spline_table(Xt, Yt);
+
+    cout << "ТОЧКИ СПЛАЙНА\n";
+    cout << "x\tspline_value\n";
+    cout << "----------------------------------------\n";
+
+    for (double x = 2.0; x <= 7.001; x += 0.02) {
+        cout << format(x) << "\t" << format(spline_table.interpolate(x)) << "\n";
+    }
+
+    cout << "\nУЗЛОВЫЕ ТОЧКИ\n";
+    cout << "x\ty\n";
+    cout << "----------------------------------------\n";
+
+    for (size_t i = 0; i < Xt.size(); i++) {
+        cout << format(Xt[i]) << "\t" << format(Yt[i]) << "\n";
+    }
+}
