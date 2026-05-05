@@ -1,25 +1,32 @@
 #include <iostream>
 #include <vector>
 #include <cmath>
-#include <algorithm>
+#include <fstream>
 #include <iomanip>
-
+#include <sstream>
+#include <algorithm>
 using namespace std;
 
-// f(x) = 1 / (1 + 25*x^2)
 double f(double x) {
     return 1.0 / (1.0 + 25.0 * x * x);
 }
 
-// Полином Лагранжа
-double lagrange(const vector<double>& x_nodes, const vector<double>& y_nodes, double x) {
-    int n = x_nodes.size();
+string format(double value) {
+    stringstream ss;
+    ss << fixed << setprecision(6) << value;
+    string str = ss.str();
+    replace(str.begin(), str.end(), '.', ',');
+    return str;
+}
+
+double lagrange(double x, const vector<double>& X, const vector<double>& Y) {
+    int n = X.size();
     double result = 0.0;
     for (int i = 0; i < n; i++) {
-        double term = y_nodes[i];
+        double term = Y[i];
         for (int j = 0; j < n; j++) {
             if (j != i) {
-                term *= (x - x_nodes[j]) / (x_nodes[i] - x_nodes[j]);
+                term *= (x - X[j]) / (X[i] - X[j]);
             }
         }
         result += term;
@@ -27,217 +34,142 @@ double lagrange(const vector<double>& x_nodes, const vector<double>& y_nodes, do
     return result;
 }
 
-// Равноотстоящие узлы
-vector<double> uniform_nodes(int n, double a, double b) {
-    vector<double> nodes(n);
-    for (int i = 0; i < n; i++) {
-        nodes[i] = a + i * (b - a) / (n - 1);
-    }
-    return nodes;
-}
-
-// Чебышевские узлы
-vector<double> chebyshev_nodes(int n, double a, double b) {
-    vector<double> nodes(n);
-    for (int i = 0; i < n; i++) {
-        double t = cos((2.0 * i + 1.0) * 3.14159265358979 / (2.0 * n));
-        nodes[i] = (a + b) / 2.0 + (b - a) / 2.0 * t;
-    }
-    sort(nodes.begin(), nodes.end());
-    return nodes;
-}
-
-// Кубический сплайн (естественный)
 class CubicSpline {
 private:
     vector<double> x, a, b, c, d;
+    int n;
+
 public:
-    CubicSpline(const vector<double>& x_nodes, const vector<double>& y_nodes) {
-        x = x_nodes;
-        int n = x.size();
-        a = y_nodes;
-        b.resize(n - 1);
-        c.resize(n);
-        d.resize(n - 1);
+    CubicSpline(const vector<double>& X, const vector<double>& Y) {
+        x = X;
+        n = x.size() - 1;
+        a = Y;
+        b.resize(n);
+        c.resize(n + 1);
+        d.resize(n);
 
-        vector<double> h(n - 1);
-        for (int i = 0; i < n - 1; i++) h[i] = x[i + 1] - x[i];
+        vector<double> h(n), alpha(n), l(n + 1), mu(n + 1), z(n + 1);
 
-        vector<double> alpha(n - 1);
-        for (int i = 1; i < n - 1; i++) {
+        for (int i = 0; i < n; i++) h[i] = x[i + 1] - x[i];
+        for (int i = 1; i < n; i++) {
             alpha[i] = (3.0 / h[i]) * (a[i + 1] - a[i]) - (3.0 / h[i - 1]) * (a[i] - a[i - 1]);
         }
 
-        vector<double> l(n), mu(n), z(n);
-        l[0] = 1.0; mu[0] = 0.0; z[0] = 0.0;
-
-        for (int i = 1; i < n - 1; i++) {
-            l[i] = 2.0 * (x[i + 1] - x[i - 1]) - h[i - 1] * mu[i - 1];
+        l[0] = 1; mu[0] = 0; z[0] = 0;
+        for (int i = 1; i < n; i++) {
+            l[i] = 2 * (x[i + 1] - x[i - 1]) - h[i - 1] * mu[i - 1];
             mu[i] = h[i] / l[i];
             z[i] = (alpha[i] - h[i - 1] * z[i - 1]) / l[i];
         }
+        l[n] = 1; z[n] = 0; c[n] = 0;
 
-        l[n - 1] = 1.0; z[n - 1] = 0.0; c[n - 1] = 0.0;
-
-        for (int i = n - 2; i >= 0; i--) {
-            c[i] = z[i] - mu[i] * c[i + 1];
-            b[i] = (a[i + 1] - a[i]) / h[i] - h[i] * (c[i + 1] + 2.0 * c[i]) / 3.0;
-            d[i] = (c[i + 1] - c[i]) / (3.0 * h[i]);
+        for (int j = n - 1; j >= 0; j--) {
+            c[j] = z[j] - mu[j] * c[j + 1];
+            b[j] = (a[j + 1] - a[j]) / h[j] - h[j] * (c[j + 1] + 2 * c[j]) / 3;
+            d[j] = (c[j + 1] - c[j]) / (3 * h[j]);
         }
     }
 
-    double evaluate(double x_val) const {
-        int n = x.size();
-        if (x_val <= x[0]) {
-            double dx = x_val - x[0];
-            return a[0] + b[0] * dx + c[0] * dx * dx + d[0] * dx * dx * dx;
-        }
-        if (x_val >= x[n - 1]) {
-            double dx = x_val - x[n - 2];
-            return a[n - 2] + b[n - 2] * dx + c[n - 2] * dx * dx + d[n - 2] * dx * dx * dx;
-        }
+    double interpolate(double x_val) const {
+        if (x_val <= x[0]) return a[0];
+        if (x_val >= x[n]) return a[n];
+
         int i = 0;
-        while (i < n - 1 && x_val > x[i + 1]) i++;
+        while (i < n && x_val > x[i + 1]) i++;
+
         double dx = x_val - x[i];
         return a[i] + b[i] * dx + c[i] * dx * dx + d[i] * dx * dx * dx;
     }
-
-    void print_coefficients() const {
-        cout << "\nКоэффициенты кубического сплайна:\n";
-        for (int i = 0; i < x.size() - 1; i++) {
-            cout << "Отрезок [" << x[i] << ", " << x[i + 1] << "]:\n";
-            cout << "  S(x) = " << a[i];
-            if (b[i] >= 0) cout << " + " << b[i] << "*(x-" << x[i] << ")";
-            else cout << " - " << -b[i] << "*(x-" << x[i] << ")";
-            if (c[i] >= 0) cout << " + " << c[i] << "*(x-" << x[i] << ")^2";
-            else cout << " - " << -c[i] << "*(x-" << x[i] << ")^2";
-            if (d[i] >= 0) cout << " + " << d[i] << "*(x-" << x[i] << ")^3\n";
-            else cout << " - " << -d[i] << "*(x-" << x[i] << ")^3\n";
-        }
-    }
 };
 
-// Вычисление максимальной погрешности на сетке из N_test точек
-double max_error(const vector<double>& x_nodes, const vector<double>& y_nodes,
-    double (*method)(const vector<double>&, const vector<double>&, double),
-    double a, double b, int N_test = 500) {
-    double max_err = 0.0;
-    for (int i = 0; i <= N_test; i++) {
-        double x_val = a + i * (b - a) / N_test;
-        double exact = f(x_val);
-        double interp = method(x_nodes, y_nodes, x_val);
-        max_err = max(max_err, fabs(interp - exact));
-    }
-    return max_err;
+vector<double> uniform_n(int n, double a, double b) {
+    vector<double> res(n + 1);
+    for (int i = 0; i <= n; i++) res[i] = a + i * (b - a) / n;
+    return res;
 }
 
-double spline_max_error(const CubicSpline& spline, double a, double b, int N_test = 500) {
-    double max_err = 0.0;
-    for (int i = 0; i <= N_test; i++) {
-        double x_val = a + i * (b - a) / N_test;
-        double exact = f(x_val);
-        double interp = spline.evaluate(x_val);
-        max_err = max(max_err, fabs(interp - exact));
+vector<double> chebyshev_n(int n, double a, double b) {
+    vector<double> res(n + 1);
+    for (int i = 0; i <= n; i++) {
+        double t = cos((2.0 * i + 1.0) / (2.0 * (n + 1)) * acos(-1));
+        res[i] = (a + b) / 2.0 + (b - a) / 2.0 * t;
     }
-    return max_err;
-}
-void print_for_graph(int n, bool chebyshev, double a, double b) {
-    vector<double> nodes;
-    if (chebyshev)
-        nodes = chebyshev_nodes(n, a, b);
-    else
-        nodes = uniform_nodes(n, a, b);
-
-    vector<double> values;
-    for (double x : nodes) values.push_back(f(x));
-
-    // Выводим 200 точек для плавного графика
-    for (int i = 0; i <= 200; i++) {
-        double x = a + i * (b - a) / 200.0;
-        cout << x << " " << f(x) << " " << lagrange(nodes, values, x) << "\n";
-    }
+    return res;
 }
 
 int main() {
-    cout << fixed << setprecision(8);
-    const double a = -1.0, b = 1.0;
-    vector<int> n_vals = { 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
-    setlocale(LC_ALL, "Russian");
-    cout << "========================================================================\n";
-    cout << "  ИССЛЕДОВАНИЕ ПОЛИНОМА ЛАГРАНЖА ДЛЯ f(x) = 1/(1+25x^2) на [-1, 1]\n";
-    cout << "========================================================================\n\n";
+    setlocale(LC_ALL, "Russian");;
 
-    // ===== 1a) Равноотстоящие узлы =====
-    cout << "1a) Равноотстоящие узлы:\n";
-    cout << "-----------------------------------------------------------\n";
-    cout << "  n    Макс. погрешность\n";
-    cout << "-----------------------------------------------------------\n";
-    for (int n : n_vals) {
-        vector<double> nodes = uniform_nodes(n, a, b);
-        vector<double> values;
-        for (double x : nodes) values.push_back(f(x));
-        double err = max_error(nodes, values, lagrange, a, b);
-        cout << " " << setw(2) << n << "        " << err;
-        if (err > 10) cout << " (разболтовка!)";
-        cout << "\n";
+    vector<int> nn = { 5, 10, 15 };
+    double a = -1.0, b = 1.0;
+    int points = 200;
+
+    ofstream out1a("C:\\Users\\User\\OneDrive\\5\\5.1\\lagrange_rav.csv");
+    out1a << "x;true_value";
+    for (int n : nn) out1a << ";lagrange_n" << n;
+    out1a << endl;
+
+    for (int i = 0; i <= points; i++) {
+        double x = a + i * (b - a) / points;
+        out1a << format(x) << ";" << format(f(x));
+
+        for (int n : nn) {
+            vector<double> X = uniform_n(n, a, b);
+            vector<double> Y(X.size());
+            for (size_t j = 0; j < X.size(); j++) Y[j] = f(X[j]);
+            out1a << ";" << format(lagrange(x, X, Y));
+        }
+        out1a << endl;
     }
+    out1a.close();
+    ofstream out1b("C:\\Users\\User\\OneDrive\\5\\5.1\\lagrange_chebyshev.csv");
+    out1b << "x;true_value";
+    for (int n : nn) out1b << ";lagrange_n" << n;
+    out1b << endl;
+    for (int i = 0; i <= points; i++) {
+        double x = a + i * (b - a) / points;
+        out1b << format(x) << ";" << format(f(x));
 
-    // ===== 1b) Чебышевские узлы =====
-    cout << "\n1b) Чебышевские узлы:\n";
-    cout << "-----------------------------------------------------------\n";
-    cout << "  n    Макс. погрешность\n";
-    cout << "-----------------------------------------------------------\n";
-    for (int n : n_vals) {
-        vector<double> nodes = chebyshev_nodes(n, a, b);
-        vector<double> values;
-        for (double x : nodes) values.push_back(f(x));
-        double err = max_error(nodes, values, lagrange, a, b);
-        cout << " " << setw(2) << n << "        " << err << "\n";
+        for (int n : nn) {
+            vector<double> X = chebyshev_n(n, a, b);
+            vector<double> Y(X.size());
+            for (size_t j = 0; j < X.size(); j++) Y[j] = f(X[j]);
+            out1b << ";" << format(lagrange(x, X, Y));
+        }
+        out1b << endl;
     }
+    out1b.close();
+    ofstream out2a("C:\\Users\\User\\OneDrive\\5\\5.1\\cubic_spline.csv");
+    out2a << "x;true_value";
+    for (int n : nn) out2a << ";spline_n" << n;
+    out2a << endl;
 
-    // ===== Исследование кубического сплайна для f(x) =====
-    cout << "\n\n========================================================================\n";
-    cout << "  ИССЛЕДОВАНИЕ КУБИЧЕСКОГО СПЛАЙНА ДЛЯ f(x) = 1/(1+25x^2)\n";
-    cout << "========================================================================\n\n";
-    cout << "  n    Макс. погрешность\n";
-    cout << "-----------------------------------------------------------\n";
-    for (int n : n_vals) {
-        vector<double> nodes = uniform_nodes(n, a, b);
-        vector<double> values;
-        for (double x : nodes) values.push_back(f(x));
-        CubicSpline spline(nodes, values);
-        double err = spline_max_error(spline, a, b);
-        cout << " " << setw(2) << n << "        " << err << "\n";
+    for (int i = 0; i <= points; i++) {
+        double x = a + i * (b - a) / points;
+        out2a << format(x) << ";" << format(f(x));
+        for (int n : nn) {
+            vector<double> X = uniform_n(n, a, b);
+            vector<double> Y(X.size());
+            for (size_t j = 0; j < X.size(); j++) Y[j] = f(X[j]);
+            CubicSpline spline(X, Y);
+            out2a << ";" << format(spline.interpolate(x));
+        }
+        out2a << endl;
     }
+    out2a.close();
 
-    // ===== Задание 2: Табличная функция =====
-    cout << "\n\n========================================================================\n";
-    cout << "  ЗАДАНИЕ 2: ИНТЕРПОЛЯЦИЯ ТАБЛИЧНОЙ ФУНКЦИИ КУБИЧЕСКИМ СПЛАЙНОМ\n";
-    cout << "========================================================================\n";
+    vector<double> Xt = { 2, 3, 5, 7 };
+    vector<double> Yt = { 4, -2, 6, -3 };
+    CubicSpline spline_table(Xt, Yt);
 
-    vector<double> x_tab = { 2.0, 3.0, 5.0, 7.0 };
-    vector<double> y_tab = { 4.0, -2.0, 6.0, -3.0 };
-
-    CubicSpline spline_tab(x_tab, y_tab);
-    spline_tab.print_coefficients();
-
-    cout << "\nПроверка интерполяции в узлах:\n";
-    cout << "---------------------------------------------\n";
-    cout << "    x    |  f(x)  |  S(x)   |  Погрешность\n";
-    cout << "---------------------------------------------\n";
-    for (int i = 0; i < x_tab.size(); i++) {
-        double s_val = spline_tab.evaluate(x_tab[i]);
-        cout << "  " << setw(4) << x_tab[i] << "   |  " << setw(5) << y_tab[i]
-            << "  |  " << setw(7) << s_val << "  |  " << fabs(s_val - y_tab[i]) << "\n";
+    ofstream out2b("C:\\Users\\User\\OneDrive\\5\\5.1\\table_spline.csv");
+    out2b << "x;spline_value;is_node" << endl;
+    for (double x = 2.0; x <= 7.0; x += 0.02) {
+        out2b << format(x) << ";" << format(spline_table.interpolate(x)) << ";0" << endl;
     }
-
-    // Несколько промежуточных точек для наглядности
-    cout << "\nЗначения сплайна в промежуточных точках:\n";
-    cout << "---------------------------------------------\n";
-    vector<double> test_x = { 2.5, 3.5, 4.0, 4.5, 5.5, 6.0, 6.5 };
-    for (double x : test_x) {
-        cout << "  S(" << x << ") = " << spline_tab.evaluate(x) << "\n";
+    for (size_t i = 0; i < Xt.size(); i++) {
+        out2b << format(Xt[i]) << ";" << format(Yt[i]) << ";1" << endl;
     }
-
-    print_for_graph(11, true, -1, 1);
+    out2b.close();
+    cout << "Данные занесены в файлы" << endl;
 }
