@@ -1,0 +1,319 @@
+#include <iostream>
+#include <cmath>
+#include <fstream>
+#include <iomanip>
+#include <chrono>
+#include <vector>
+#include <string>
+
+using namespace std;
+
+const double sqrt_pi = 1.772453850905516;
+const double alpha = 0.01;
+
+double f_erf(double x, double y) {
+    return (2.0 / sqrt_pi) * exp(-x * x);
+}
+
+double runge_kutta4_erf(double (*f)(double, double), double x0, double y0, double x, double h) {
+    int n = (int)((x - x0) / h);
+    double y = y0;
+    double xi = x0;
+
+    for (int i = 0; i < n; i++) {
+        double k1 = h * f(xi, y);
+        double k2 = h * f(xi + h / 2, y + k1 / 2);
+        double k3 = h * f(xi + h / 2, y + k2 / 2);
+        double k4 = h * f(xi + h, y + k3);
+
+        y += (k1 + 2 * k2 + 2 * k3 + k4) / 6.0;
+        xi += h;
+    }
+    return y;
+}
+
+double erf_quadrature(double x) {
+    if (x == 0) return 0.0;
+    int n = 1000;
+    double h = x / n;
+    double sum = 0.0;
+
+    for (int i = 0; i <= n; i++) {
+        double t = i * h;
+        double val = exp(-t * t);
+        if (i == 0 || i == n) sum += val;
+        else if (i % 2 == 0) sum += 2 * val;
+        else sum += 4 * val;
+    }
+    return (2.0 / sqrt_pi) * sum * h / 3.0;
+}
+
+void exercise1() {
+    cout << " Функция ошибок erf(x)" << endl;
+
+    double h = 0.01;
+    double x0 = 0.0, y0 = 0.0;
+
+    cout << "\n   x   |  RK4 (ДУ)  |  Квадратуры  |  Погрешность" << endl;
+    cout << "-------|------------|--------------|-------------" << endl;
+
+    auto start_rk4 = chrono::high_resolution_clock::now();
+    vector<double> rk4_results;
+
+    for (int i = 0; i <= 20; i++) {
+        double x = i * 0.1;
+        double y = runge_kutta4_erf(f_erf, x0, y0, x, h);
+        rk4_results.push_back(y);
+    }
+
+    auto end_rk4 = chrono::high_resolution_clock::now();
+    auto duration_rk4 = chrono::duration_cast<chrono::microseconds>(end_rk4 - start_rk4);
+
+    auto start_quad = chrono::high_resolution_clock::now();
+    vector<double> quad_results;
+
+    for (int i = 0; i <= 20; i++) {
+        double x = i * 0.1;
+        double y = erf_quadrature(x);
+        quad_results.push_back(y);
+    }
+
+    auto end_quad = chrono::high_resolution_clock::now();
+    auto duration_quad = chrono::duration_cast<chrono::microseconds>(end_quad - start_quad);
+
+    for (int i = 0; i <= 20; i++) {
+        double x = i * 0.1;
+        double error = fabs(rk4_results[i] - quad_results[i]);
+        cout << fixed << setprecision(4);
+        cout << " " << x << "   |  " << rk4_results[i] << "  |  " << quad_results[i] << "    |  " << error << endl;
+    }
+
+    cout << "\nВремя выполнения (RK4): " << duration_rk4.count() << " мкс" << endl;
+    cout << "Время выполнения (квадратуры): " << duration_quad.count() << " мкс" << endl;
+
+    if (duration_rk4.count() < duration_quad.count()) {
+        cout << "Метод RK4 быстрее на " << (duration_quad.count() - duration_rk4.count()) << " мкс" << endl;
+    }
+    else {
+        cout << "Метод квадратур быстрее на " << (duration_rk4.count() - duration_quad.count()) << " мкс" << endl;
+    }
+}
+
+void system_predator_prey(double t, double r, double f, double& dr, double& df) {
+    dr = 2.0 * r - alpha * r * f;
+    df = -f + alpha * r * f;
+}
+
+void runge_kutta4_system(double& r, double& f, double t, double h) {
+    double dr1, df1, dr2, df2, dr3, df3, dr4, df4;
+
+    system_predator_prey(t, r, f, dr1, df1);
+    system_predator_prey(t + h / 2, r + h * dr1 / 2, f + h * df1 / 2, dr2, df2);
+    system_predator_prey(t + h / 2, r + h * dr2 / 2, f + h * df2 / 2, dr3, df3);
+    system_predator_prey(t + h, r + h * dr3, f + h * df3, dr4, df4);
+
+    r += h * (dr1 + 2 * dr2 + 2 * dr3 + dr4) / 6.0;
+    f += h * (df1 + 2 * df2 + 2 * df3 + df4) / 6.0;
+}
+
+void analyze_population(double r0, double f0, double t_max, const string& filename) {
+    double r = r0, f = f0;
+    double t = 0.0;
+    double h = 0.01;
+
+    ofstream file(filename);
+    file << "t;r;f\n";
+    file << t << ";" << r << ";" << f << "\n";
+
+    bool rabbits_extinct = false;
+    bool foxes_extinct = false;
+
+    while (t < t_max && !(rabbits_extinct && foxes_extinct)) {
+        runge_kutta4_system(r, f, t, h);
+        t += h;
+
+        if (t - floor(t * 100) / 100 < h / 2) {
+            file << t << ";" << r << ";" << f << "\n";
+        }
+
+        if (r < 1.0 && !rabbits_extinct) {
+            rabbits_extinct = true;
+            cout << "Кролики вымерли при t = " << t << ", осталось лис: " << (f > 0 ? f : 0) << endl;
+        }
+        if (f < 1.0 && !foxes_extinct) {
+            foxes_extinct = true;
+            cout << "Лисы вымерли при t = " << t << ", осталось кроликов: " << (r > 0 ? r : 0) << endl;
+        }
+    }
+
+    file.close();
+    cout << "Результаты сохранены в " << filename << endl;
+}
+
+void find_foxes_extinction() {
+    cout << "\n--- Поиск условий вымирания лис (расширенный диапазон) ---" << endl;
+
+    bool found = false;
+    ofstream result_file("foxes_extinction.csv");
+    result_file << "r0;f0;t_extinction;rabbits_remained\n";
+
+    for (int r_val = 1; r_val <= 200; r_val += 5) {
+        for (int f_val = 1; f_val <= 20; f_val += 1) {
+            double r = r_val, f = f_val;
+            double t = 0;
+            double h = 0.01;
+            double t_max = 200.0;
+
+            while (t < t_max && r > 0.5 && f > 0.5) {
+                runge_kutta4_system(r, f, t, h);
+                t += h;
+            }
+
+            if (f < 0.5 && r > 1.0) {
+                cout << " Лисы вымерли: r0=" << r_val << ", f0=" << f_val
+                    << " (t = " << t << ", кроликов осталось: " << r << ")" << endl;
+                result_file << r_val << ";" << f_val << ";" << t << ";" << r << "\n";
+                found = true;
+            }
+        }
+    }
+    result_file.close();
+
+    if (!found) {
+        cout << "В диапазоне r0=1..200, f0=1..20 лисы не вымерли" << endl;
+    }
+}
+
+void find_both_extinction() {
+    cout << "\n--- Поиск условий, при которых вымирают оба вида (r0 = f0) ---" << endl;
+
+    bool found = false;
+    ofstream result_file("both_extinction.csv");
+    result_file << "r0_f0;t_extinction;final_r;final_f\n";
+
+    for (double val = 0.5; val <= 20; val += 0.5) {
+        double r = val, f = val;
+        double t = 0;
+        double h = 0.01;
+        double t_max = 300.0;
+        bool rabbits_died = false;
+        bool foxes_died = false;
+
+        while (t < t_max && r > 0.1 && f > 0.1) {
+            runge_kutta4_system(r, f, t, h);
+            t += h;
+
+            if (r < 0.5 && !rabbits_died) {
+                rabbits_died = true;
+            }
+            if (f < 0.5 && !foxes_died) {
+                foxes_died = true;
+            }
+        }
+
+        if (r < 0.5 && f < 0.5) {
+            cout << " Оба вида вымерли: r0 = f0 = " << val
+                << " (t = " << t << ")" << endl;
+            result_file << val << ";" << t << ";" << r << ";" << f << "\n";
+            found = true;
+        }
+        else if (r < 0.5 && f >= 0.5) {
+            cout << " Только кролики вымерли: r0 = f0 = " << val
+                << ", лис осталось: " << f << endl;
+        }
+        else if (r >= 0.5 && f < 0.5) {
+            cout << " Только лисы вымерли: r0 = f0 = " << val
+                << ", кроликов осталось: " << r << endl;
+        }
+    }
+    result_file.close();
+
+    if (!found) {
+        cout << "При r0 = f0 от 0.5 до 20 оба вида не вымерли" << endl;
+    }
+}
+
+void find_extinction_boundary() {
+    cout << "\n--- Граница вымирания кроликов (максимальное f0, при котором вымирают кролики) ---" << endl;
+    cout << "   r0   |   max f0 (вымирание кроликов)" << endl;
+    cout << "--------|-------------------------------" << endl;
+
+    ofstream result_file("extinction_boundary.csv");
+    result_file << "r0;max_f0\n";
+
+    for (int r_val = 10; r_val <= 200; r_val += 10) {
+        int max_f_for_extinction = 0;
+
+        for (int f_val = 1; f_val <= 100; f_val += 2) {
+            double r = r_val, f = f_val;
+            double t = 0;
+            double h = 0.01;
+            double t_max = 200.0;
+            bool rabbits_died = false;
+
+            while (t < t_max && r > 0.5 && f > 0.5) {
+                runge_kutta4_system(r, f, t, h);
+                t += h;
+            }
+
+            if (r < 0.5) {
+                max_f_for_extinction = f_val;
+                rabbits_died = true;
+            }
+
+            if (!rabbits_died && f_val > 5) {
+                break;
+            }
+        }
+
+        cout << "   " << setw(4) << r_val << "   |        " << setw(4) << max_f_for_extinction << endl;
+        result_file << r_val << ";" << max_f_for_extinction << "\n";
+    }
+    result_file.close();
+}
+
+void exercise2() {
+    cout << "УПРАЖНЕНИЕ 2: Модель хищник-жертва" << endl;
+
+    double t_max = 100.0;
+
+    cout << "\n--- А) Исследование поведения системы ---" << endl;
+
+    vector<pair<double, double>> initial_conditions = {
+        {15, 22},
+        {50, 20},
+        {20, 50},
+        {100, 2},
+        {30, 30},
+        {200, 10},
+        {10, 200}
+    };
+
+    int case_num = 1;
+    for (size_t idx = 0; idx < initial_conditions.size(); idx++) {
+        double r0 = initial_conditions[idx].first;
+        double f0 = initial_conditions[idx].second;
+        cout << "\nСлучай " << case_num << ": r0 = " << r0 << ", f0 = " << f0 << endl;
+        string filename = "population_case" + to_string(case_num) + ".csv";
+        analyze_population(r0, f0, t_max, filename);
+        case_num++;
+    }
+
+    cout << "\n--- Б) r0 = 15, f0 = 22 ---" << endl;
+    analyze_population(15, 22, 100.0, "population_base.csv");
+
+    // Поиск условий вымирания
+    find_foxes_extinction();
+    find_both_extinction();
+    find_extinction_boundary();
+}
+
+// ==================== MAIN ====================
+int main() {
+    setlocale(LC_ALL, "rus");
+    cout << "ЛАБОРАТОРНАЯ РАБОТА: Задача Коши для ОДУ" << endl;
+
+
+    exercise1();
+    exercise2();
+}
