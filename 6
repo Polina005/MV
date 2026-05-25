@@ -1,29 +1,54 @@
 #include <iostream>
 #include <random>
 #include <cmath>
-#include <vector>
 #include <fstream>
 #include <iomanip>
+#include <sstream>
+#include <string>
 
 using namespace std;
 
-const int n = 12; 
-const int N = 10000; 
+const int n = 12;
+const int N = 100000;
+const double pi = 3.141592653589793;
+const double exact_pi = 3.141592653589793;
+
+string format_number(double value) {
+    stringstream ss;
+    ss << fixed << setprecision(4) << value;
+    string s = ss.str();
+    for (char& c : s) {
+        if (c == '.') c = ',';
+    }
+    while (s.back() == '0') s.pop_back();
+    if (s.back() == ',') s.pop_back();
+    return s;
+}
 
 double f1(double x) {
     return 10.0 * x / n;
 }
 
 double f2(double x) {
-    return 10.0 * (20.0 - x) / (20.0 - n)+20.0;
+    return (10.0 - x) / (n - 20.0) + 20.0;
 }
 
 double integr(double x) {
     return sqrt(29.0 - n * cos(x) * cos(x));
 }
 
+double rectangle_method(double (*f)(double), double a, double b, int n) {
+    double h = (b - a) / n;
+    double sum = 0.0;
+    for (int i = 0; i < n; i++) {
+        double x = a + i * h + h / 2.0;
+        sum += f(x);
+    }
+    return sum * h;
+}
+
 bool inCircle(double x, double y, double R) {
-    return (x * x + y * y) <= R * R;
+    return (x + R) * (x + R) + (y - R) * (y - R) <= R * R;
 }
 
 double polar(double phi, double A, double B) {
@@ -35,19 +60,29 @@ double polar(double phi, double A, double B) {
 }
 
 int main() {
-    setlocale(LC_ALL, "Russian");
+    setlocale(LC_ALL, "rus");
+
     random_device rd;
     mt19937 gen(rd());
     uniform_real_distribution<> dis(0.0, 1.0);
 
-    cout << "задание 1: Площадь между f1(x) и f2(x)" << endl;
+    cout << "Количество точек N = " << N << endl << endl;
+    cout << "    1. Площадь между f1(x) и f2(x)" << endl;
 
-    double x_min = 0, x_max = 20;
-    double y_min = 0, y_max = 10;
-    double ar = (x_max - x_min) * (y_max - y_min); 
+    double x_min = 0, x_max = 30;
+    double y_min = 0;
+    double y_max = max(f1(x_max), f2(x_max));
+    y_max = max(y_max, 20.0);
+
+    double rect_area = (x_max - x_min) * (y_max - y_min);
+
+    cout << "Прямоугольник: [" << x_min << ", " << x_max << "] x [0, " << y_max << "]" << endl;
+    cout << "Площадь прямоугольника = " << rect_area << endl;
 
     int M1 = 0;
-    vector<pair<double, double>> points1;
+
+    ofstream points1("task1_points.csv");
+    points1 << "x;y;status\n";
 
     for (int i = 0; i < N; i++) {
         double x = x_min + dis(gen) * (x_max - x_min);
@@ -56,123 +91,174 @@ int main() {
         double low = f1(x);
         double up = f2(x);
 
-        // Корректировка: f1 снизу, f2 сверху при 0 <= x <= 20
-        if (x >= 0 && x <= 20) {
-            if (y >= low && y <= up) {
-                M1++;
-                points1.push_back({ x, y });
-            }
+        if (y >= low && y <= up) {
+            M1++;
+            points1 << format_number(x) << ";" << format_number(y) << ";1\n";
+        }
+        else {
+            points1 << format_number(x) << ";" << format_number(y) << ";0\n";
         }
     }
+    points1.close();
 
-    double S1 = (double)M1 / N * ar;
-    double error1_abs = ar * sqrt((double)M1 / N * (1 - (double)M1 / N) / N);
+    ofstream lines1("task1_lines.csv");
+    lines1 << "x;f1(x);f2(x)\n";
+    for (double x = 0; x <= x_max + 0.01; x += 0.1) {
+        lines1 << format_number(x) << ";" << format_number(f1(x)) << ";" << format_number(f2(x)) << "\n";
+    }
+    lines1.close();
+
+    double S1 = (double)M1 / N * rect_area;
+    double p1 = (double)M1 / N;
+    double error1_abs = rect_area * sqrt(p1 * (1 - p1) / N);
     double error1_rel = error1_abs / S1 * 100;
 
-    cout << "Площадь фигуры S1 = " << S1 << endl;
     cout << "Попало точек: " << M1 << " из " << N << endl;
-    cout << "Абсолютная погрешность: ~" << error1_abs << endl;
-    cout << "Относительная погрешность: ~" << error1_rel << "%" << endl << endl;
+    cout << "Площадь фигуры = " << S1 << endl;
+    cout << "Абсолютная погрешность = " << error1_abs << endl;
+    cout << "Относительная погрешность = " << error1_rel << "%" << endl << endl;
 
-    cout << "задание 2: Интеграл sqrt(29 - n·cos^2x) dx от 0 до 5" << endl;
+    cout << "    2. Интеграл от 0 до pi/2" << endl;
 
-    double a = 0, b = 5;
+    double a = 0, b = pi / 2.0;
     double sum_f = 0;
 
-    for (int i = 0; i < N; i++) {
-        double x = a + dis(gen) * (b - a);
-        sum_f += integr(x);
+    ofstream func2("task2_function.csv");
+    func2 << "x;f(x)\n";
+    for (double x = a; x <= b + 0.01; x += 0.01) {
+        func2 << format_number(x) << ";" << format_number(integr(x)) << "\n";
     }
+    func2.close();
 
-    double integral = (b - a) / N * sum_f;
-    double varian = 0;
-    double mean = sum_f / N;
-    vector<double> f_vals;
+    ofstream points2("task2_points.csv");
+    points2 << "x;y;status\n";
+
+    double maxY = 0;
+    for (double x = a; x <= b; x += 0.001) {
+        maxY = max(maxY, integr(x));
+    }
+    maxY += 0.5;
+
+    int M2 = 0;
     for (int i = 0; i < N; i++) {
         double x = a + dis(gen) * (b - a);
+        double y = dis(gen) * maxY;
         double fx = integr(x);
-        varian += (fx - mean) * (fx - mean);
-    }
-    varian /= N;
-    double i_error = (b - a) * sqrt(varian / N);
+        sum_f += fx;
 
-    cout << "Приближённое значение интеграла = " << integral << endl;
-    cout << "Абсолютная погрешность: ~" << i_error << endl;
-    cout << "Относительная погрешность: ~" << i_error / integral * 100 << "%" << endl << endl;
-
-    cout << "задание 3: Вычисление пи через площадь круга радиуса R = n" << endl;
-
-    double R = n;
-    double square_side = 2 * R;
-    double square_area = square_side * square_side;
-
-    int M_circle = 0;
-    for (int i = 0; i < N; i++) {
-        double x = -R + dis(gen) * square_side;
-        double y = -R + dis(gen) * square_side;
-        if (inCircle(x, y, R)) {
-            M_circle++;
+        if (y <= fx) {
+            M2++;
+            points2 << format_number(x) << ";" << format_number(y) << ";1\n";
+        }
+        else {
+            points2 << format_number(x) << ";" << format_number(y) << ";0\n";
         }
     }
+    points2.close();
 
-    double pi_approx = (double)M_circle / N * 4.0;
-    double pi_error_abs = fabs(pi_approx - 3.1415926535);
-    double pi_error_rel = pi_error_abs / 3.1415926535 * 100;
+    double integral_mc = (b - a) * sum_f / N;
 
-    cout << "Приближённое значение pi = " << pi_approx << endl;
-    cout << "Точное значение pi = " << 3.1415926535 << endl;
+    int n_exact = 1000;
+    double exact_integral = rectangle_method(integr, a, b, n_exact);
+
+    double integral_error_abs = fabs(integral_mc - exact_integral);
+    double integral_error_rel = integral_error_abs / exact_integral * 100;
+
+    cout << "Значение интеграла (Монте-Карло) = " << integral_mc << endl;
+    cout << "Точное значение (прямоугольники) = " << exact_integral << endl;
+    cout << "Абсолютная погрешность = " << integral_error_abs << endl;
+    cout << "Относительная погрешность = " << integral_error_rel << "%" << endl << endl;
+
+    cout << "    3. Вычисление pi через круг" << endl;
+
+    double R = n;
+    int M_circle = 0;
+
+    ofstream points3("task3_points.csv");
+    points3 << "x;y;status\n";
+
+    ofstream circle3("task3_circle.csv");
+    circle3 << "x;y\n";
+    for (double phi = 0; phi <= 2 * pi + 0.01; phi += 0.05) {
+        double x = R * cos(phi);
+        double y = R * sin(phi);
+        circle3 << format_number(x) << ";" << format_number(y) << "\n";
+    }
+    circle3.close();
+
+    for (int i = 0; i < N; i++) {
+        double x = -R + dis(gen) * (2 * R);
+        double y = -R + dis(gen) * (2 * R);
+        if (x * x + y * y <= R * R) {
+            M_circle++;
+            points3 << format_number(x) << ";" << format_number(y) << ";1\n";
+        }
+        else {
+            points3 << format_number(x) << ";" << format_number(y) << ";0\n";
+        }
+    }
+    points3.close();
+
+    double pi_approx = 4.0 * M_circle / N;
+    double pi_error_abs = fabs(pi_approx - exact_pi);
+    double pi_error_rel = pi_error_abs / exact_pi * 100;
+
+    cout << "Попало точек в круг: " << M_circle << " из " << N << endl;
+    cout << "pi = " << pi_approx << endl;
+    cout << "Точное pi = " << exact_pi << endl;
     cout << "Абсолютная погрешность = " << pi_error_abs << endl;
     cout << "Относительная погрешность = " << pi_error_rel << "%" << endl << endl;
 
-    cout << "задание 4: Площадь фигуры p^2 = A·cos^2ф + B·sin^2ф" << endl;
+    cout << "    4. Полярная фигура" << endl;
 
-    double A, B;
-    if (n >= 11) {
-        A = n - 10;  
-        B = n - 10;
-    }
-    else {
-        A = 11 + n;
-        B = 11 - n;
-    }
-
-    cout << "A = " << A << ", B = " << B << endl;
-
+    double A = n - 10;
+    double B = n - 10;
     double max_rho = sqrt(max(A, B));
-    double rect_x_min = -max_rho, rect_x_max = max_rho;
-    double rect_y_min = -max_rho, rect_y_max = max_rho;
-    double rect_area4 = (rect_x_max - rect_x_min) * (rect_y_max - rect_y_min);
+    double rect_min = -max_rho;
+    double rect_max = max_rho;
+    double rect_area4 = (rect_max - rect_min) * (rect_max - rect_min);
 
     int M4 = 0;
-    for (int i = 0; i < N; i++) {
-        double x = rect_x_min + dis(gen) * (rect_x_max - rect_x_min);
-        double y = rect_y_min + dis(gen) * (rect_y_max - rect_y_min);
 
+    ofstream points4("task4_points.csv");
+    points4 << "x;y;status\n";
+
+    ofstream curve4("task4_curve.csv");
+    curve4 << "x;y\n";
+    for (double phi = 0; phi <= 2 * pi + 0.01; phi += 0.02) {
+        double rho = polar(phi, A, B);
+        double x = rho * cos(phi);
+        double y = rho * sin(phi);
+        curve4 << format_number(x) << ";" << format_number(y) << "\n";
+    }
+    curve4.close();
+
+    for (int i = 0; i < N; i++) {
+        double x = rect_min + dis(gen) * (rect_max - rect_min);
+        double y = rect_min + dis(gen) * (rect_max - rect_min);
         double phi = atan2(y, x);
         double r_calc = sqrt(x * x + y * y);
         double r_boundary = polar(phi, A, B);
-
         if (r_calc <= r_boundary) {
             M4++;
+            points4 << format_number(x) << ";" << format_number(y) << ";1\n";
+        }
+        else {
+            points4 << format_number(x) << ";" << format_number(y) << ";0\n";
         }
     }
+    points4.close();
 
     double S4 = (double)M4 / N * rect_area4;
-    double error4_abs = rect_area4 * sqrt((double)M4 / N * (1 - (double)M4 / N) / N);
 
-    cout << "Площадь фигуры S4 = " << S4 << endl;
-    cout << "Попало точек: " << M4 << " из " << N << endl;
-    cout << "Абсолютная погрешность: ~" << error4_abs << endl;
-    cout << "Относительная погрешность: ~" << error4_abs / S4 * 100 << "%" << endl;
+    double p4 = (double)M4 / N;
+    double error4_abs = rect_area4 * sqrt(p4 * (1 - p4) / N);
+    double error4_rel = error4_abs / S4 * 100;
 
-    ofstream fout("monte_carlo_results.txt");
-    fout << "Результаты метода Монте-Карло (вариант n=" << n << ")" << endl;
-    fout << "Количество точек N=" << N << endl << endl;
-    fout << "Задание 1: Площадь = " << S1 << " ± " << error1_abs << endl;
-    fout << "Задание 2: Интеграл = " << integral << " ± " << i_error << endl;
-    fout << "Задание 3: π ≈ " << pi_approx << " (погрешность " << pi_error_rel << "%)" << endl;
-    fout << "Задание 4: Площадь полярной фигуры = " << S4 << " ± " << error4_abs << endl;
-    fout.close();
-
-    cout << "\nРезультаты сохранены в файл monte_carlo_results.txt" << endl;
+    cout << "Площадь фигуры = " << S4 << endl;
+    cout << "Попало точек : " << M4 << endl<<endl;
+  //  cout << "Абсолютная погрешность = " << error4_abs << endl;
+  //  cout << "Относительная погрешность = " << error4_rel << "%" << endl << endl;
+    cout << "Файлы для графиков: task1_points.csv, task1_lines.csv, task2_points.csv," << endl;
+    cout << "task2_function.csv, task3_points.csv, task3_circle.csv, task4_points.csv, task4_curve.csv" << endl;
 }
